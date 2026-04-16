@@ -35,6 +35,7 @@ urlpatterns = [
     # ── Service Areas ─────────────────────────────────────────
     path('service-areas/',  views.ServiceAreaListView.as_view(), name='service-areas'),
     path('check-pincode/',  views.CheckPincodeView.as_view(),    name='check-pincode'),
+    path("health/", views.HealthView.as_view(), name="health"),
 
     # ── Admin ─────────────────────────────────────────────────
     path('admin/dashboard/',              views.AdminDashboardView.as_view(),    name='admin-dashboard'),
