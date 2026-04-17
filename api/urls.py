@@ -5,8 +5,9 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
 
 router = DefaultRouter()
-router.register(r'fuel-types', views.FuelTypeViewSet, basename='fuel-type')
-router.register(r'addresses',  views.AddressViewSet,  basename='address')
+router.register(r'fuel-types',    views.FuelTypeViewSet,    basename='fuel-type')
+router.register(r'addresses',     views.AddressViewSet,     basename='address')
+router.register(r'service-areas', views.ServiceAreaViewSet, basename='service-area')
 
 urlpatterns = [
 
@@ -32,10 +33,8 @@ urlpatterns = [
     path('notifications/read-all/',     views.MarkAllNotificationsReadView.as_view(), name='notif-read-all'),
     path('notifications/<int:pk>/read/', views.MarkNotificationReadView.as_view(),  name='notif-read'),
 
-    # ── Service Areas ─────────────────────────────────────────
-    path('service-areas/',  views.ServiceAreaListView.as_view(), name='service-areas'),
+    # ── Service Areas — handled by router above ───────────────
     path('check-pincode/',  views.CheckPincodeView.as_view(),    name='check-pincode'),
-    path("health/", views.HealthView.as_view(), name="health"),
 
     # ── Admin ─────────────────────────────────────────────────
     path('admin/dashboard/',              views.AdminDashboardView.as_view(),    name='admin-dashboard'),

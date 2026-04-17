@@ -271,7 +271,8 @@ class AdminAssignDriverView(APIView):
     permission_classes = [IsAdmin]
 
     def post(self, request, pk):
-        driver_id = request.data.get('driver_id')
+        # Accept 'driver' (frontend) or 'driver_id' (legacy) interchangeably
+        driver_id = request.data.get('driver') or request.data.get('driver_id')
         try:
             order  = Order.objects.get(pk=pk)
             driver = User.objects.get(pk=driver_id, role='driver')
@@ -421,30 +422,59 @@ class MarkAllNotificationsReadView(APIView):
 
 
 # ═══════════════════════════════════════════════════════════════
-# SERVICE AREA (public)
+# SERVICE AREA — Admin full CRUD + public read
 # ═══════════════════════════════════════════════════════════════
 
-class ServiceAreaListView(generics.ListAPIView):
-    """GET /api/service-areas/ — Check if pincode is serviceable."""
-    serializer_class   = ServiceAreaSerializer
-    permission_classes = [AllowAny]
-    queryset           = ServiceArea.objects.filter(is_active=True)
+class ServiceAreaViewSet(viewsets.ModelViewSet):
+    """
+    GET    /api/service-areas/       — list   (public: only active; admin: all)
+    POST   /api/service-areas/       — create (admin only)
+    GET    /api/service-areas/<id>/  — detail (public)
+    PUT    /api/service-areas/<id>/  — update (admin only)
+    PATCH  /api/service-areas/<id>/  — partial update (admin only)
+    DELETE /api/service-areas/<id>/  — delete (admin only)
+    """
+    serializer_class = ServiceAreaSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        is_admin = (
+            user.is_authenticated and
+            (getattr(user, 'role', None) == 'admin' or user.is_superuser)
+        )
+        if is_admin:
+            return ServiceArea.objects.all().order_by('name')
+        return ServiceArea.objects.filter(is_active=True).order_by('name')
+
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [AllowAny()]
+        return [IsAdmin()]
 
 
 class CheckPincodeView(APIView):
-    """GET /api/check-pincode/?pincode=110001"""
+    """
+    GET  /api/check-pincode/?pincode=110001
+    POST /api/check-pincode/   body: { "pincode": "110001" }
+    Both methods accepted.
+    """
     permission_classes = [AllowAny]
 
-    def get(self, request):
-        pincode = request.query_params.get('pincode', '').strip()
+    def _check(self, pincode):
+        pincode = (pincode or '').strip()
         if not pincode:
-            return Response({'detail': 'pincode query param required.'}, status=400)
-        areas = ServiceArea.objects.filter(is_active=True)
-        for area in areas:
+            return Response({'detail': 'pincode required.'}, status=400)
+        for area in ServiceArea.objects.filter(is_active=True):
             if pincode in area.pincode_list():
-                return Response({'serviceable': True, 'area': area.name})
-        return Response({'serviceable': False})
-    
+                return Response({'serviceable': True, 'area_name': area.name, 'area_id': area.id})
+        return Response({'serviceable': False, 'area_name': None})
+
+    def get(self, request):
+        return self._check(request.query_params.get('pincode', ''))
+
+    def post(self, request):
+        return self._check(request.data.get('pincode', ''))
+        
 class HealthView(APIView):
     """
     GET /api/health/
