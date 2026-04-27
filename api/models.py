@@ -202,12 +202,21 @@ class Notification(models.Model):
 
 # ── Service Area ─────────────────────────────────────────────────
 class ServiceArea(models.Model):
-    name       = models.CharField(max_length=100)
-    pincodes   = models.TextField(help_text="Comma separated pincodes")
-    is_active  = models.BooleanField(default=True)
+    name      = models.CharField(max_length=100,
+                    help_text="State name, e.g. Uttar Pradesh")
+    districts = models.TextField(
+    help_text="Comma separated district names",
+    default=""
+)
+    is_active = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name
 
-    def pincode_list(self):
-        return [p.strip() for p in self.pincodes.split(',')]
+    def district_list(self):
+        """Lowercase list for case-insensitive matching."""
+        return [d.strip().lower() for d in self.districts.split(',') if d.strip()]
+
+    def district_list_display(self):
+        """Original-cased list for display."""
+        return [d.strip() for d in self.districts.split(',') if d.strip()]

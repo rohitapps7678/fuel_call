@@ -271,8 +271,7 @@ class AdminAssignDriverView(APIView):
     permission_classes = [IsAdmin]
 
     def post(self, request, pk):
-        # Accept 'driver' (frontend) or 'driver_id' (legacy) interchangeably
-        driver_id = request.data.get('driver') or request.data.get('driver_id')
+        driver_id = request.data.get('driver_id')
         try:
             order  = Order.objects.get(pk=pk)
             driver = User.objects.get(pk=driver_id, role='driver')
@@ -422,85 +421,50 @@ class MarkAllNotificationsReadView(APIView):
 
 
 # ═══════════════════════════════════════════════════════════════
-# SERVICE AREA — Admin full CRUD + public read
+# SERVICE AREA (public)
 # ═══════════════════════════════════════════════════════════════
 
-class ServiceAreaViewSet(viewsets.ModelViewSet):
-    """
-    GET    /api/service-areas/       — list   (public: only active; admin: all)
-    POST   /api/service-areas/       — create (admin only)
-    GET    /api/service-areas/<id>/  — detail (public)
-    PUT    /api/service-areas/<id>/  — update (admin only)
-    PATCH  /api/service-areas/<id>/  — partial update (admin only)
-    DELETE /api/service-areas/<id>/  — delete (admin only)
-    """
-    serializer_class = ServiceAreaSerializer
-
-    def get_queryset(self):
-        user = self.request.user
-        is_admin = (
-            user.is_authenticated and
-            (getattr(user, 'role', None) == 'admin' or user.is_superuser)
-        )
-        if is_admin:
-            return ServiceArea.objects.all().order_by('name')
-        return ServiceArea.objects.filter(is_active=True).order_by('name')
-
-    def get_permissions(self):
-        if self.action in ['list', 'retrieve']:
-            return [AllowAny()]
-        return [IsAdmin()]
-
-
-class CheckPincodeView(APIView):
-    """
-    GET  /api/check-pincode/?pincode=110001
-    POST /api/check-pincode/   body: { "pincode": "110001" }
-    Both methods accepted.
-    """
+class ServiceAreaListView(generics.ListAPIView):
+    """GET /api/service-areas/ — List all active service areas with districts."""
+    serializer_class   = ServiceAreaSerializer
     permission_classes = [AllowAny]
+    queryset           = ServiceArea.objects.filter(is_active=True)
 
-    def _check(self, pincode):
-        pincode = (pincode or '').strip()
-        if not pincode:
-            return Response({'detail': 'pincode required.'}, status=400)
-        for area in ServiceArea.objects.filter(is_active=True):
-            if pincode in area.pincode_list():
-                return Response({'serviceable': True, 'area_name': area.name, 'area_id': area.id})
-        return Response({'serviceable': False, 'area_name': None})
 
-    def get(self, request):
-        return self._check(request.query_params.get('pincode', ''))
+class AdminServiceAreaViewSet(viewsets.ModelViewSet):
+    """Admin CRUD for service areas. POST/PATCH /api/admin/service-areas/"""
+    serializer_class   = ServiceAreaSerializer
+    permission_classes = [IsAdmin]
+    queryset           = ServiceArea.objects.all()
 
-    def post(self, request):
-        return self._check(request.data.get('pincode', ''))
-        
-class HealthView(APIView):
-    """
-    GET /api/health/
-    Auth nahi chahiye — load balancer / uptime checks ke liye
+
+class CheckDistrictView(APIView):
+    """GET /api/check-district/?district=Aligarh
+    Returns whether the district is serviceable.
+    Case-insensitive match.
     """
     permission_classes = [AllowAny]
 
     def get(self, request):
-        # DB check
-        db_ok = True
-        try:
-            User.objects.exists()
-        except Exception:
-            db_ok = False
-
-        all_ok = db_ok
-
-        return Response(
-            {
-                "status":    "ok" if all_ok else "degraded",
-                "timestamp": timezone.now().isoformat(),
-                "checks": {
-                    "database": "ok" if db_ok else "error",
-                    "api":      "ok",
-                },
-                "version": "1.0.0",
-            },
-            status=status.HTTP_200_OK if all_ok else status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
+        district = request.query_params.get('district', '').strip()
+        if not district:
+            return Response(
+                {'detail': 'district query param required.'},
+                status=400
+            )
+        query = district.lower()
+        areas = ServiceArea.objects.filter(is_active=True)
+        for area in areas:
+            if query in area.district_list():
+                # Find original-cased district name
+                matched = next(
+                    (d for d in area.district_list_display()
+                     if d.lower() == query),
+                    district.title()
+                )
+                return Response({
+                    'serviceable': True,
+                    'district':    matched,
+                    'state':       area.name,
+                })
+        return Response({'serviceable': False})

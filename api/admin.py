@@ -64,5 +64,14 @@ class NotificationAdmin(admin.ModelAdmin):
 
 @admin.register(ServiceArea)
 class ServiceAreaAdmin(admin.ModelAdmin):
-    list_display = ['name', 'is_active']
+    list_display  = ['name', 'is_active', 'district_preview']
     list_editable = ['is_active']
+    search_fields = ['name', 'districts']
+
+    def district_preview(self, obj):
+        districts = obj.district_list_display()
+        preview   = ', '.join(districts[:4])
+        if len(districts) > 4:
+            preview += f' (+{len(districts)-4} more)'
+        return preview
+    district_preview.short_description = 'Districts'
